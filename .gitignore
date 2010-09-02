@@ -1,0 +1,7 @@
+Makefile
+*.cmake
+CMakeCache.txt
+config.h
+CMakeFiles/
+*~
+mISDNnotiy
