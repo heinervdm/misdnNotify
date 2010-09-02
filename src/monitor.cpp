@@ -1,6 +1,10 @@
 /*
  *
  * Copyright 2008 Karsten Keil <kkeil@suse.de>
+ * Copyright 2010 Thomas Zimmermann <bugs@vdm-design.de>
+ *
+ * This is based on:
+ * http://git.misdn.org/?p=mISDNuser.git;a=blob;f=tools/loghex.c
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -84,10 +88,12 @@ usage(char *pname)
 	fprintf(stderr,"\n");
 	fprintf(stderr,"\n     Valid options are:\n");
 	fprintf(stderr,"\n");
-	fprintf(stderr,"  -?              Usage ; printout this information\n");
-	fprintf(stderr,"  -c<n>           use card number n (default 1)\n");
-	fprintf(stderr,"  -l <file>       write logfile <file>\n");
-	fprintf(stderr,"  -w <file>       write wiresharkdump <file>\n");
+	fprintf(stderr,"  -?          Usage ; printout this information\n");
+	fprintf(stderr,"  -c<n>       use card number n (default 1)\n");
+	fprintf(stderr,"  -l <file>   write logfile <file>\n");
+	fprintf(stderr,"  -w <file>   write wiresharkdump <file>\n");
+	fprintf(stderr,"  -u <url>    Appends the number to <url> and shows\n"); 
+	fprintf(stderr,"              the result instead of the number only\n");
 	fprintf(stderr,"\n");
 }
 
