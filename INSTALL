@@ -1,0 +1,11 @@
+To install do:
+
+cmake .
+make
+make install
+
+misdnNotify has the following dependencies:
+ cmake
+ pkg-config
+ libcurl
+ dbus-glib
