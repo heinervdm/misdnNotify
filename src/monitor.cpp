@@ -199,7 +199,7 @@ static void printhex(unsigned char *p, int len)
 	printf("\n");
 }
 
-static void notify(unsigned char *p, int len, char url)
+static void notify(unsigned char *p, int len, char *url)
 {
 	if (len>23) {
 		char url2[strlen(url)+len], buffer[len];
@@ -232,25 +232,30 @@ static void notify(unsigned char *p, int len, char url)
 			curl_easy_perform(curl_handle);
 			curl_easy_cleanup(curl_handle);
 			curl_global_cleanup();
-
-			if (chunk.length()>10)
-				 sprintf(text, chunk.c_str());	
 #endif
 
+			if (chunk.length()>10) {
+				text = (char*)malloc(sizeof(chunk.c_str()) + 1);
+				sprintf(text, "%s", chunk.c_str());
+			} else {
+				text = (char*)malloc(sizeof(buffer) + 9);
+				sprintf(text, "%s%s%s", "<br>", buffer, "<br>");
+			}
+
 #ifdef HAVE_DBUSGLIB
-/*
-    <method name="Notify">
-      <arg name="app_name" type="s" direction="in"/>
-      <arg name="id" type="u" direction="in"/>
-      <arg name="icon" type="s" direction="in"/>
-      <arg name="summary" type="s" direction="in"/>
-      <arg name="body" type="s" direction="in"/>
-      <arg name="actions" type="as" direction="in"/>
-      <arg name="hints" type="a{sv}" direction="in"/>
-      <arg name="timeout" type="i" direction="in"/>
-      <arg name="return_id" type="u" direction="out"/>
-    </method>
-*/
+			/*
+			<method name="Notify">
+				<arg name="app_name" type="s" direction="in"/>
+				<arg name="id" type="u" direction="in"/>
+				<arg name="icon" type="s" direction="in"/>
+				<arg name="summary" type="s" direction="in"/>
+				<arg name="body" type="s" direction="in"/>
+				<arg name="actions" type="as" direction="in"/>
+				<arg name="hints" type="a{sv}" direction="in"/>
+				<arg name="timeout" type="i" direction="in"/>
+				<arg name="return_id" type="u" direction="out"/>
+			</method>
+			*/
 			DBusGConnection* dbus_conn;
 			DBusGProxy *dbus_proxy;
 			GArray *actions = g_array_sized_new(TRUE, FALSE, sizeof(gchar *), 0);
@@ -258,8 +263,8 @@ static void notify(unsigned char *p, int len, char url)
 
 			dbus_conn = dbus_g_bus_get(DBUS_BUS_SESSION, NULL);
 			dbus_proxy = dbus_g_proxy_new_for_name(dbus_conn, "org.freedesktop.Notifications",
-								"/org/freedesktop/Notifications",
-								"org.freedesktop.Notifications");
+									"/org/freedesktop/Notifications",
+									"org.freedesktop.Notifications");
 
 			dbus_g_proxy_call_no_reply(dbus_proxy, "Notify",
 						   G_TYPE_STRING, PACKAGE,
