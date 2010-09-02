@@ -189,102 +189,140 @@ static void printhex(unsigned char *p, int len)
 	printf("\n");
 }
 
-static void notify(unsigned char *p, int len, char *url)
+static char *getcallerid(unsigned char *p)
 {
-	if (len > 23) {
-		g_type_init();
-		char buffer[len];
-		char *anfang, *ende;
-		GString *text, *chunk, *url2;
-		int i, x = 1;
-		char n[] = "0";
+	char *anfang = NULL, *buffer = NULL;
+	int i, numlen, x = 0;
+	char n[] = "0";
 
-		anfang = strchr((char*)p, '!');
-		ende = strchr((char*)p, 'p');
-		if (anfang != NULL) {
-		
-			buffer[0] = n[0];
-			for(i = 2; i < (len-1); i++) {
-				if (ende[0] == anfang[i]) break;
-				buffer[x++] = anfang[i];
-			}
-			buffer[x] = '\0';
+	anfang = strchr((char*)p, 0x6c); /* Find Information element */
 
+	if (anfang != NULL) {
+		numlen = (anfang[1] - 2); /* get number length without 0 */
+		anfang += 4; /* go to number start */
+		buffer = (char*)malloc(sizeof(char) * (numlen + 2));
+		buffer[x++] = n[0]; /* add leading 0 */
+		for(i = 0; i < numlen; i++) buffer[x++] = anfang[i];
+		buffer[x] = '\0';
+	}
 
-			chunk = g_string_new("");
+	return buffer;
+}
+
+static char *getmsn(unsigned char *p)
+{
+	char *anfang = NULL, *buffer = NULL;
+	int i, numlen, x = 0;
+	char n[] = "0";
+
+	anfang = strchr((char*)p, 0x70); /* Find Information element */
+
+	if (anfang != NULL) {
+		numlen = (anfang[1] - 1); /* get number length without 0 */
+		anfang += 3; /* go to number start */
+		buffer = (char*)malloc(sizeof(char) * (numlen + 1));
+		for(i = 0; i < numlen; i++) buffer[x++] = anfang[i];
+		buffer[x] = '\0';
+	}
+
+	return buffer;
+}
+
+static char *getcallerinfo(char *number, char *url)
+{
+	GString *text, *chunk, *url2;
+
+	chunk = g_string_new("");
 #ifdef HAVE_LIBCURL
-			if (url != NULL) {
-				url2 = g_string_new(url);
-				g_string_append(url2, buffer);
+	if (url != NULL) {
+		url2 = g_string_new(url);
+		g_string_append(url2, number);
 
-				CURL *curl_handle;
-				curl_global_init(CURL_GLOBAL_ALL);
-				curl_handle = curl_easy_init();
-				curl_easy_setopt(curl_handle, CURLOPT_URL, g_string_free(url2, FALSE));
-				curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, writer);
-				curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, chunk);
-				curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-				curl_easy_perform(curl_handle);
-				curl_easy_cleanup(curl_handle);
-				curl_global_cleanup();
-			}
+		CURL *curl_handle;
+		curl_global_init(CURL_GLOBAL_ALL);
+		curl_handle = curl_easy_init();
+		curl_easy_setopt(curl_handle, CURLOPT_URL, g_string_free(url2, FALSE));
+		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, writer);
+		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, chunk);
+		curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+		curl_easy_perform(curl_handle);
+		curl_easy_cleanup(curl_handle);
+		curl_global_cleanup();
+	}
 #endif
 
-			if (chunk->len > 10) {
-				text = chunk;
-			} else {
-				g_string_free(chunk, TRUE);
-				text = g_string_new("<br>");
-				g_string_append(text, buffer);
-				g_string_append(text, "<br>");
-			}
+	if (chunk->len > 10) {
+		text = chunk;
+	} else {
+		g_string_free(chunk, TRUE);
+		text = g_string_new("<br>");
+		g_string_append(text, number);
+		g_string_append(text, "<br>");
+	}
+	
+	return g_string_free(text, FALSE);
+}
 
+static void shownotification(char *text)
+{
 #ifdef HAVE_DBUSGLIB
-			/*
-			<method name="Notify">
-				<arg name="app_name" type="s" direction="in"/>
-				<arg name="id" type="u" direction="in"/>
-				<arg name="icon" type="s" direction="in"/>
-				<arg name="summary" type="s" direction="in"/>
-				<arg name="body" type="s" direction="in"/>
-				<arg name="actions" type="as" direction="in"/>
-				<arg name="hints" type="a{sv}" direction="in"/>
-				<arg name="timeout" type="i" direction="in"/>
-				<arg name="return_id" type="u" direction="out"/>
-			</method>
-			*/
-			DBusGConnection* dbus_conn;
-			DBusGProxy *dbus_proxy;
+/*
+	<method name="Notify">
+		<arg name="app_name" type="s" direction="in"/>
+		<arg name="id" type="u" direction="in"/>
+		<arg name="icon" type="s" direction="in"/>
+		<arg name="summary" type="s" direction="in"/>
+		<arg name="body" type="s" direction="in"/>
+		<arg name="actions" type="as" direction="in"/>
+		<arg name="hints" type="a{sv}" direction="in"/>
+		<arg name="timeout" type="i" direction="in"/>
+		<arg name="return_id" type="u" direction="out"/>
+	</method>
+*/
+	DBusGConnection* dbus_conn;
+	DBusGProxy *dbus_proxy;
 
-			dbus_conn = dbus_g_bus_get(DBUS_BUS_SESSION, NULL);
-			dbus_proxy = dbus_g_proxy_new_for_name(dbus_conn,
-						"org.freedesktop.Notifications",
-						"/org/freedesktop/Notifications",
-						"org.freedesktop.Notifications");
+	dbus_conn = dbus_g_bus_get(DBUS_BUS_SESSION, NULL);
+	dbus_proxy = dbus_g_proxy_new_for_name(dbus_conn,
+					"org.freedesktop.Notifications",
+					"/org/freedesktop/Notifications",
+					"org.freedesktop.Notifications");
 
-			if (dbus_proxy != NULL) {
-				GArray *actions = g_array_sized_new(TRUE, FALSE,
-							sizeof(gchar *), 0);
-				GHashTable *hints = g_hash_table_new_full(
-							g_str_hash, g_str_equal,
-							g_free, g_free);
+	if (dbus_proxy != NULL) {
+		GArray *actions = g_array_sized_new(TRUE, FALSE, 
+						    sizeof(gchar *), 0);
+		GHashTable *hints = g_hash_table_new_full(g_str_hash,
+						g_str_equal, g_free, g_free);
 
-				dbus_g_proxy_call_no_reply(dbus_proxy, "Notify",
+		dbus_g_proxy_call_no_reply(dbus_proxy, "Notify",
 					G_TYPE_STRING, PACKAGE,
 					G_TYPE_UINT, 0,
 					G_TYPE_STRING, "quassel",
 					G_TYPE_STRING, "Eingehender Anruf",
-					G_TYPE_STRING, g_string_free(text, FALSE),
+					G_TYPE_STRING, text,
 					G_TYPE_STRV, (gchar **)g_array_free(actions, FALSE),
 					dbus_g_type_get_map("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), hints,
 					G_TYPE_INT, -1,
 					G_TYPE_INVALID);
 
-				g_hash_table_destroy(hints);
-			}
-			g_object_unref(dbus_proxy);
-			dbus_g_connection_unref(dbus_conn);
+		g_hash_table_destroy(hints);
+	}
+	g_object_unref(dbus_proxy);
+	dbus_g_connection_unref(dbus_conn);
 #endif
+}
+
+static void notify(unsigned char *p, char *url)
+{
+	if (p[6] & 0x05) { /* only if it's a call setup */
+		char *number, *text;
+
+		number = getcallerid(p);
+
+		if (number != NULL) {
+			text = getcallerinfo(number, url);			
+			free(number);
+			shownotification(text);
 		}
 	}
 }
@@ -318,7 +356,9 @@ main(int argc, char *argv[])
 	struct mISDNhead 	*hh;
 	struct mISDNversion	ver;
 	FILE	*wfile = NULL, *lfile = NULL;
-	
+
+	g_type_init();
+
 	*wfilename = 0;
 	while (aidx < argc) {
 		if (argv[aidx] && argv[aidx][0]=='-') {
@@ -560,8 +600,7 @@ main(int argc, char *argv[])
 			if (result > MISDN_HEADER_LEN) {
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
-				notify(&buffer[MISDN_HEADER_LEN],
-				       result - MISDN_HEADER_LEN, url);
+				notify(&buffer[MISDN_HEADER_LEN], url);
 			} else
 				printf("\n");
 		}
