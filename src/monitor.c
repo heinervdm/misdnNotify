@@ -199,10 +199,16 @@ static char *getcallerid(unsigned char *p)
 
 	if (anfang != NULL) {
 		numlen = (anfang[1] - 2); /* get number length without 0 */
-		anfang += 4; /* go to number start */
 		buffer = (char*)malloc(sizeof(char) * (numlen + 2));
-		buffer[x++] = n[0]; /* add leading 0 */
-		for(i = 0; i < numlen; i++) buffer[x++] = anfang[i];
+		if (anfang[2] & 0x20) /* check Number type = national number */
+			buffer[x++] = '0'; /* add leading 0 */
+		else if (anfang[2] & 0x10) {
+			/* check Number type = international number */
+			buffer[x++] = '0'; /* add leading 0 */
+			buffer[x++] = '0'; /* add second leading 0 */
+		}
+		anfang += 4; /* go to number start */
+		for (i = 0; i < numlen; i++) buffer[x++] = anfang[i];
 		buffer[x] = '\0';
 	}
 
