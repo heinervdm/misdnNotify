@@ -342,20 +342,22 @@ static char *checkcallerinfo(char *number, char *sqlitedb)
 			printf("Database connection failed\n");
 			return NULL;
 		}
-		char *query = malloc(sizeof(char) * 
-					(strlen(number) + 45));
-		sprintf(query, "SELECT notification FROM numbercache WHERE number = '%s'", number);
-		retval = sqlite3_prepare_v2(handle,query,-1,&stmt,0);
+		retval = sqlite3_prepare_v2(handle,"SELECT notification FROM numbercache WHERE number=?;",-1,&stmt,0);
 		if(retval) {
 			printf("Selecting data from DB Failed\n");
+			sqlite3_finalize(stmt);
+			sqlite3_close(handle);
 			return NULL;
 		}
+		sqlite3_bind_text(stmt, 1, number, strlen(number), NULL);
         
 		while(1) {
 			retval = sqlite3_step(stmt);
         
 			if(retval == SQLITE_ROW) {
-				text = (char*)sqlite3_column_text(stmt,1);
+				const unsigned char *tmp = (const unsigned char*)sqlite3_column_text(stmt,0);
+				text = (char *)malloc(sizeof(char) * (strlen(tmp)+1));
+				sprintf(text, "%s", tmp);
 			}
 			else if(retval == SQLITE_DONE) {
 				break;
@@ -365,7 +367,12 @@ static char *checkcallerinfo(char *number, char *sqlitedb)
 				return NULL;
 			}
 		}
+
+		sqlite3_finalize(stmt);
 		sqlite3_close(handle);
+
+		printf("Found in Database: %s : %s\n", number, text);
+
 		return text;
 	}
 	else
