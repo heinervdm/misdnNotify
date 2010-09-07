@@ -3,5 +3,6 @@ Makefile
 CMakeCache.txt
 config.h
 CMakeFiles/
+build/
 *~
 mISDNnotify

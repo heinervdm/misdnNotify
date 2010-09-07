@@ -204,7 +204,6 @@ static char *getcallerid(unsigned char *p)
 {
 	char *anfang = NULL, *buffer = NULL;
 	int i, numlen, x = 0;
-	char n[] = "0";
 
 	anfang = strchr((char*)p, 0x6c); /* Find Information element */
 
@@ -230,7 +229,6 @@ static char *getmsn(unsigned char *p)
 {
 	char *anfang = NULL, *buffer = NULL;
 	int i, numlen, x = 0;
-	char n[] = "0";
 
 	anfang = strchr((char*)p, 0x70); /* Find Information element */
 
@@ -356,7 +354,7 @@ static char *checkcallerinfo(char *number, char *sqlitedb)
         
 			if(retval == SQLITE_ROW) {
 				const unsigned char *tmp = (const unsigned char*)sqlite3_column_text(stmt,0);
-				text = (char *)malloc(sizeof(char) * (strlen(tmp)+1));
+				text = (char *)malloc(sizeof(char) * (strlen((const char *)tmp)+1));
 				sprintf(text, "%s", tmp);
 			}
 			else if(retval == SQLITE_DONE) {
@@ -711,18 +709,18 @@ int main(int argc, char *argv[])
 				cts.tv.tv_sec = 0;
 				cts.tv.tv_usec = 0;
 			}
-			if (wfile && (result > MISDN_HEADER_LEN))
-				write_wfile(wfile, buffer, result, &cts.tv,
-					    di.protocol);
-			if (lfile && (result > MISDN_HEADER_LEN))
-				write_lfile(lfile, &buffer[MISDN_HEADER_LEN],
-					    result - MISDN_HEADER_LEN);
 			printf(" received %3d bytes prim = %04x id=%08x",
 				result, hh->prim, hh->id);
-			if (result > MISDN_HEADER_LEN) {
+			if ((unsigned)result > MISDN_HEADER_LEN) {
+				if (wfile) write_wfile(wfile, buffer, result,
+					&cts.tv, di.protocol);
+				if (lfile) write_lfile(lfile,
+					&buffer[MISDN_HEADER_LEN],
+					result - MISDN_HEADER_LEN);
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
-				notify(&buffer[MISDN_HEADER_LEN], url, sqlitedb);
+				notify(&buffer[MISDN_HEADER_LEN], url,
+				       sqlitedb);
 			} else
 				printf("\n");
 		}
