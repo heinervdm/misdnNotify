@@ -212,13 +212,12 @@ static char *getcallerid(unsigned char *p)
 		buffer = (char*)malloc(sizeof(char) * (numlen + 2));
 		if (anfang[2] & 0x20) /* check Number type = national number */
 			buffer[x++] = '0'; /* add leading 0 */
-		else if (anfang[2] & 0x10) {
+		else if (anfang[2] & 0x10)
 			/* check Number type = international number */
-			buffer[x++] = '0'; /* add leading 0 */
-			buffer[x++] = '0'; /* add second leading 0 */
-		}
+			buffer[x++] = '+'; /* add leading + */
 		anfang += 4; /* go to number start */
-		for (i = 0; i < numlen; i++) buffer[x++] = anfang[i];
+		for (i = 0; i < numlen; i++)
+			buffer[x++] = anfang[i];
 		buffer[x] = '\0';
 	}
 
@@ -236,7 +235,8 @@ static char *getmsn(unsigned char *p)
 		numlen = (anfang[1] - 1); /* get number length without 0 */
 		anfang += 3; /* go to number start */
 		buffer = (char*)malloc(sizeof(char) * (numlen + 1));
-		for(i = 0; i < numlen; i++) buffer[x++] = anfang[i];
+		for(i = 0; i < numlen; i++)
+			buffer[x++] = anfang[i];
 		buffer[x] = '\0';
 	}
 
@@ -256,10 +256,12 @@ static char *getcallerinfo(char *number, char *url)
 		CURL *curl_handle;
 		curl_global_init(CURL_GLOBAL_ALL);
 		curl_handle = curl_easy_init();
-		curl_easy_setopt(curl_handle, CURLOPT_URL, g_string_free(url2, FALSE));
+		curl_easy_setopt(curl_handle, CURLOPT_URL,
+				 g_string_free(url2, FALSE));
 		curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, writer);
 		curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, chunk);
-		curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+		curl_easy_setopt(curl_handle, CURLOPT_USERAGENT,
+				 "libcurl-agent/1.0");
 		curl_easy_perform(curl_handle);
 		curl_easy_cleanup(curl_handle);
 		curl_global_cleanup();
@@ -315,8 +317,12 @@ static void shownotification(char *text)
 					G_TYPE_STRING, "quassel",
 					G_TYPE_STRING, "Eingehender Anruf",
 					G_TYPE_STRING, text,
-					G_TYPE_STRV, (gchar **)g_array_free(actions, FALSE),
-					dbus_g_type_get_map("GHashTable", G_TYPE_STRING, G_TYPE_VALUE), hints,
+					G_TYPE_STRV,
+					(gchar **)g_array_free(actions, FALSE),
+					dbus_g_type_get_map("GHashTable",
+							    G_TYPE_STRING,
+							    G_TYPE_VALUE),
+					   hints,
 					G_TYPE_INT, -1,
 					G_TYPE_INVALID);
 
@@ -353,23 +359,27 @@ static char *checkcallerinfo(char *number, char *sqlitedb)
 			retval = sqlite3_step(stmt);
         
 			if(retval == SQLITE_ROW) {
-				const unsigned char *tmp = (const unsigned char*)sqlite3_column_text(stmt,0);
-				text = (char *)malloc(sizeof(char) * (strlen((const char *)tmp)+1));
+				const unsigned char *tmp = 
+					(const unsigned char*)
+					sqlite3_column_text(stmt,0);
+				text = (char *)malloc(sizeof(char) *
+					(strlen((const char *)tmp)+1));
 				sprintf(text, "%s", tmp);
+				printf("Found in Database: %s : %s\n", number,
+				       text);
 			}
 			else if(retval == SQLITE_DONE) {
 				break;
 			}
 			else {
-				printf("Some error encountered while reading number cache\n");
+				printf("Some error encountered while reading");
+				printf(" number cache\n");
 				return NULL;
 			}
 		}
 
 		sqlite3_finalize(stmt);
 		sqlite3_close(handle);
-
-		printf("Found in Database: %s : %s\n", number, text);
 
 		return text;
 	}
@@ -389,7 +399,9 @@ static void storecallerinfo(char *number, char *text, char *sqlitedb)
 			printf("Database connection failed\n");
 			return;
 		}		
-		char *query = sqlite3_mprintf("INSERT INTO numbercache VALUES(%Q,%Q)", number, text);
+		char *query = 
+			sqlite3_mprintf("INSERT INTO numbercache VALUES(%Q,%Q)",
+					number, text);
 		sqlite3_exec(handle, query, 0, 0, 0);
 		sqlite3_free(query);
 		printf("%s not found in database: inserting\n", number);
@@ -398,21 +410,38 @@ static void storecallerinfo(char *number, char *text, char *sqlitedb)
 #endif
 }
 
-static void notify(unsigned char *p, char *url, char *sqlitedb)
+static void notify(unsigned char *p, int len, char *url, char *sqlitedb)
 {
-	if (p[6] & 0x05) { /* only if it's a call setup */
-		char *number, *text;
+	if (len > 6 && p[6] & 0x05) { /* only if it's a call setup */
+		char *number, *text, *msn, *notify;
 
 		number = getcallerid(p);
+		msn = getmsn(p);
 
 		if (number != NULL) {
 			text = checkcallerinfo(number, sqlitedb);
+
 			if (text == NULL) {
 				text = getcallerinfo(number, url);
 				storecallerinfo(number, text, sqlitedb);
 			}
+			
+			notify = malloc(sizeof(char) *
+					(strlen(text) + strlen(msn) + 50));
+			
+			if (msn) {
+				sprintf(notify, "%s<br>Called MSN: %s", text,
+					msn);
+				free(msn);
+			}
+			else 
+				sprintf(notify, "%s", text);
+
+			shownotification(notify);
+
 			free(number);
-			shownotification(text);
+			free(notify);
+			free(text);
 		}
 	}
 }
@@ -719,7 +748,8 @@ int main(int argc, char *argv[])
 					result - MISDN_HEADER_LEN);
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
-				notify(&buffer[MISDN_HEADER_LEN], url,
+				notify(&buffer[MISDN_HEADER_LEN],
+				       result - MISDN_HEADER_LEN, url,
 				       sqlitedb);
 			} else
 				printf("\n");
