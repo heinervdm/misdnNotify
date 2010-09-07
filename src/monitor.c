@@ -83,6 +83,7 @@ static void usage(char *pname)
 	fprintf(stderr,"\n");
 	fprintf(stderr,"  -?          Usage ; printout this information\n");
 	fprintf(stderr,"  -c<n>       use card number n (default 1)\n");
+	fprintf(stderr,"  -m <msn>    only show calls to MSN <msn>\n");
 	fprintf(stderr,"  -l <file>   write logfile <file>\n");
 	fprintf(stderr,"  -w <file>   write wiresharkdump <file>\n");
 #ifdef HAVE_SQLITE3
@@ -410,13 +411,21 @@ static void storecallerinfo(char *number, char *text, char *sqlitedb)
 #endif
 }
 
-static void notify(unsigned char *p, int len, char *url, char *sqlitedb)
+static void notify(unsigned char *p, int len, char *url, char *checkmsn,
+		   char *sqlitedb)
 {
 	if (len > 6 && p[6] & 0x05) { /* only if it's a call setup */
 		char *number, *text, *msn, *notify;
 
 		number = getcallerid(p);
 		msn = getmsn(p);
+
+		if (msn != NULL && checkmsn != NULL &&
+			0 != strcmp(msn, checkmsn)) {
+			free(msn);
+			free(number);
+			return;
+		}
 
 		if (number != NULL) {
 			text = checkcallerinfo(number, sqlitedb);
@@ -462,6 +471,7 @@ int main(int argc, char *argv[])
 	int	buflen = 512;
 	char	sw;
 	char	wfilename[512], lfilename[512], url[512], sqlitedb[512];
+	char	msn[10];
 	u_char	buffer[buflen];
 	struct msghdr	mh;
 	struct iovec	iov[1];
@@ -485,6 +495,24 @@ int main(int argc, char *argv[])
 				case 'c':
 					if (argv[aidx][2]) {
 						cardnr=atol(&argv[aidx][2]);
+					}
+					break;
+				case 'm':
+					if (!argv[aidx][2]) {
+						idx = 0;
+						aidx++;
+					} else {
+						idx=2;
+					}
+					if (aidx<=argc) {
+						if (10 <= strlen(&argv[aidx][idx])) {
+							fprintf(stderr," -m MSN too long\n");
+							exit(1);
+						}
+						strcpy(msn, &argv[aidx][idx]);
+					} else {
+						fprintf(stderr," Switch %c without value\n",sw);
+						exit(1);
 					}
 					break;
 				case 'w':
@@ -749,7 +777,7 @@ int main(int argc, char *argv[])
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
 				notify(&buffer[MISDN_HEADER_LEN],
-				       result - MISDN_HEADER_LEN, url,
+				       result - MISDN_HEADER_LEN, url, msn,
 				       sqlitedb);
 			} else
 				printf("\n");
