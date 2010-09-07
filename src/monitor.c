@@ -383,14 +383,12 @@ static void storecallerinfo(char *number, char *text, char *sqlitedb)
 		if(retval) {
 			printf("Database connection failed\n");
 			return;
-		}
-		char *query = malloc(sizeof(char) * 
-					(strlen(number) + strlen(text) + 35));
-		sprintf(query, "INSERT INTO numbercache ('%s','%s')",
-				 number, text);
-		retval = sqlite3_exec(handle,query,0,0,0);
+		}		
+		char *query = sqlite3_mprintf("INSERT INTO numbercache VALUES(%Q,%Q)", number, text);
+		sqlite3_exec(handle, query, 0, 0, 0);
+		sqlite3_free(query);
+		printf("%s not found in database: inserting\n", number);
 		sqlite3_close(handle);
-		free(query);
 	}
 #endif
 }
