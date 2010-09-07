@@ -9,7 +9,7 @@ INCLUDE(FindPkgConfig)
 
 # Setup package meta-data
 SET(PACKAGE "mISDNnotify")
-SET(VERSION "0.0.4")
+SET(VERSION "0.1.0")
 SET(PACKAGE_TARNAME "mISDNnotify")
 SET(PACKAGE_BUGREPORT " ")
 SET(PACKAGE_NAME "mISDNnotify")
