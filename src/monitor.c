@@ -49,9 +49,15 @@
 #include <curl/easy.h>
 #endif
 
+#include <glib.h>
+
 #ifdef HAVE_DBUSGLIB
 #include <dbus/dbus.h>
 #include <dbus/dbus-glib.h>
+#endif
+
+#ifdef HAVE_SQLITE3
+#include <sqlite3.h>
 #endif
 
 #include <mISDNif.h>
@@ -65,12 +71,11 @@ static int writer(char *data, size_t size, size_t nmemb, GString *buffer) {
 		result = size * nmemb;
 	}
 	return result;
-} 
+}
 
 static int dch_echo=0;
 
-static void 
-usage(char *pname)
+static void usage(char *pname)
 {
 	fprintf(stderr,"Call with %s [options]\n",pname);
 	fprintf(stderr,"\n");
@@ -80,8 +85,13 @@ usage(char *pname)
 	fprintf(stderr,"  -c<n>       use card number n (default 1)\n");
 	fprintf(stderr,"  -l <file>   write logfile <file>\n");
 	fprintf(stderr,"  -w <file>   write wiresharkdump <file>\n");
-	fprintf(stderr,"  -u <url>    Appends the number to <url> and shows\n"); 
+#ifdef HAVE_SQLITE3
+	fprintf(stderr,"  -d <file>   use number cache database <file>\n");
+#endif
+#ifdef HAVE_LIBCURL
+	fprintf(stderr,"  -u <url>    append the number to <url> and show\n"); 
 	fprintf(stderr,"              the result instead of the number only\n");
+#endif
 	fprintf(stderr,"\n");
 }
 
@@ -146,7 +156,8 @@ static void write_wfile(FILE *f, unsigned char *buf, int len,
 	fflush(f);
 }
 
-static void write_lfile(FILE *f, unsigned char *p, int len) {
+static void write_lfile(FILE *f, unsigned char *p, int len)
+{
 	if (len>23) {
 		char line[500], buffer[len];
 		char *anfang, *ende;
@@ -318,7 +329,73 @@ static void shownotification(char *text)
 #endif
 }
 
-static void notify(unsigned char *p, char *url)
+static char *checkcallerinfo(char *number, char *sqlitedb)
+{
+#ifdef HAVE_SQLITE3
+	if (strlen(sqlitedb)) {
+		int retval;
+		sqlite3_stmt *stmt;
+		sqlite3 *handle;
+		char *text = NULL;
+		retval = sqlite3_open(sqlitedb, &handle);
+		if(retval) {
+			printf("Database connection failed\n");
+			return NULL;
+		}
+		char *query = malloc(sizeof(char) * 
+					(strlen(number) + 45));
+		sprintf(query, "SELECT notification FROM numbercache WHERE number = '%s'", number);
+		retval = sqlite3_prepare_v2(handle,query,-1,&stmt,0);
+		if(retval) {
+			printf("Selecting data from DB Failed\n");
+			return NULL;
+		}
+        
+		while(1) {
+			retval = sqlite3_step(stmt);
+        
+			if(retval == SQLITE_ROW) {
+				text = (char*)sqlite3_column_text(stmt,1);
+			}
+			else if(retval == SQLITE_DONE) {
+				break;
+			}
+			else {
+				printf("Some error encountered while reading number cache\n");
+				return NULL;
+			}
+		}
+		sqlite3_close(handle);
+		return text;
+	}
+	else
+#endif
+		return NULL;
+}
+
+static void storecallerinfo(char *number, char *text, char *sqlitedb)
+{
+#ifdef HAVE_SQLITE3
+	if (strlen(sqlitedb)) {
+		int retval;
+		sqlite3 *handle;
+		retval = sqlite3_open(sqlitedb, &handle);
+		if(retval) {
+			printf("Database connection failed\n");
+			return;
+		}
+		char *query = malloc(sizeof(char) * 
+					(strlen(number) + strlen(text) + 35));
+		sprintf(query, "INSERT INTO numbercache ('%s','%s')",
+				 number, text);
+		retval = sqlite3_exec(handle,query,0,0,0);
+		sqlite3_close(handle);
+		free(query);
+	}
+#endif
+}
+
+static void notify(unsigned char *p, char *url, char *sqlitedb)
 {
 	if (p[6] & 0x05) { /* only if it's a call setup */
 		char *number, *text;
@@ -326,7 +403,11 @@ static void notify(unsigned char *p, char *url)
 		number = getcallerid(p);
 
 		if (number != NULL) {
-			text = getcallerinfo(number, url);			
+			text = checkcallerinfo(number, sqlitedb);
+			if (text == NULL) {
+				text = getcallerinfo(number, url);
+				storecallerinfo(number, text, sqlitedb);
+			}
 			free(number);
 			shownotification(text);
 		}
@@ -340,8 +421,7 @@ struct ctstamp {
 	struct timeval	tv;
 };
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	int	aidx=1, idx, i, channel;
 	int	cardnr = 0;
@@ -349,7 +429,7 @@ main(int argc, char *argv[])
 	struct sockaddr_mISDN  log_addr;
 	int	buflen = 512;
 	char	sw;
-	char	wfilename[512], lfilename[512], url[512];
+	char	wfilename[512], lfilename[512], url[512], sqlitedb[512];
 	u_char	buffer[buflen];
 	struct msghdr	mh;
 	struct iovec	iov[1];
@@ -424,6 +504,24 @@ main(int argc, char *argv[])
 							exit(1);
 						}
 						strcpy(url, &argv[aidx][idx]);
+					} else {
+						fprintf(stderr," Switch %c without value\n",sw);
+						exit(1);
+					}
+					break;
+				case 'd':
+					if (!argv[aidx][2]) {
+						idx = 0;
+						aidx++;
+					} else {
+						idx=2;
+					}
+					if (aidx<=argc) {
+						if (512 <= strlen(&argv[aidx][idx])) {
+							fprintf(stderr," -d filename too long\n");
+							exit(1);
+						}
+						strcpy(sqlitedb, &argv[aidx][idx]);
 					} else {
 						fprintf(stderr," Switch %c without value\n",sw);
 						exit(1);
@@ -563,7 +661,20 @@ main(int argc, char *argv[])
 			printf("cannot open wireshark dump file(%s)\n",
 			       lfilename);
 	}
-
+#ifdef HAVE_SQLITE3
+	if (strlen(sqlitedb)) {
+		int retval;
+		sqlite3 *handle;
+		retval = sqlite3_open(sqlitedb, &handle);
+		if(retval) {
+			printf("Database connection failed\n");
+			exit(1);
+		}
+		char create_table[100] = "CREATE TABLE IF NOT EXISTS numbercache (number TEXT PRIMARY KEY, notification TEXT NOT NULL)";
+		retval = sqlite3_exec(handle,create_table,0,0,0);
+		sqlite3_close(handle);
+	}
+#endif
 	hh = (struct mISDNhead *)buffer;
 
 	while (1) {
@@ -606,7 +717,7 @@ main(int argc, char *argv[])
 			if (result > MISDN_HEADER_LEN) {
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
-				notify(&buffer[MISDN_HEADER_LEN], url);
+				notify(&buffer[MISDN_HEADER_LEN], url, sqlitedb);
 			} else
 				printf("\n");
 		}

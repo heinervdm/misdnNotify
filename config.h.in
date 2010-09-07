@@ -1,7 +1,7 @@
  
 #cmakedefine HAVE_LIBCURL 1
-#cmakedefine HAVE_QTDBUS 1
 #cmakedefine HAVE_DBUSGLIB 1
+#cmakedefine HAVE_SQLITE3 1
 #cmakedefine PACKAGE "@PACKAGE@"
 #cmakedefine PACKAGE_TARNAME "@PACKAGE_TARNAME@"
 #cmakedefine VERSION "@VERSION@"
