@@ -483,6 +483,15 @@ int main(int argc, char *argv[])
 	struct mISDNversion ver;
 	FILE *wfile = NULL, *lfile = NULL;
 
+	/* Initialise di with 0 */
+	di.id = 0;
+	di.Dprotocols = 0;
+	di.Bprotocols = 0;
+	di.protocol = 0;
+	di.nrbchan = 0;
+	for (i = 0; i < MISDN_MAX_IDLEN; i++) di.name[i] = '\0';
+	for (i = 0; i < MISDN_CHMAP_SIZE; i++) di.channelmap[i] = (u_char)'\0';
+
 	g_type_init();
 
 	while (aidx < argc) {
