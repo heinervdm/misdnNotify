@@ -421,7 +421,9 @@ static void notify(unsigned char *p, int len, char *url, char *checkmsn,
 		msn = getmsn(p);
 
 		if (msn != NULL && checkmsn != NULL &&
-			0 != strcmp(msn, checkmsn)) {
+			0 == strcmp(msn, checkmsn)) {
+			printf("This call is not for %s, it's for: %s",
+			       checkmsn, msn);
 			free(msn);
 			free(number);
 			return;
