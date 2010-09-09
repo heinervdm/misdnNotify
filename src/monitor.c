@@ -244,7 +244,7 @@ static char *getmsn(unsigned char *p)
 	return buffer;
 }
 
-static char *getcallerinfo(char *number, char *url)
+static char *getcallerinfo(char *number, const char *url)
 {
 	GString *text, *chunk, *url2;
 
@@ -334,7 +334,7 @@ static void shownotification(char *text)
 #endif
 }
 
-static char *checkcallerinfo(char *number, char *sqlitedb)
+static char *checkcallerinfo(char *number, const char *sqlitedb)
 {
 #ifdef HAVE_SQLITE3
 	if (strlen(sqlitedb)) {
@@ -389,7 +389,7 @@ static char *checkcallerinfo(char *number, char *sqlitedb)
 		return NULL;
 }
 
-static void storecallerinfo(char *number, char *text, char *sqlitedb)
+static void storecallerinfo(char *number, char *text, const char *sqlitedb)
 {
 #ifdef HAVE_SQLITE3
 	if (strlen(sqlitedb)) {
@@ -411,8 +411,8 @@ static void storecallerinfo(char *number, char *text, char *sqlitedb)
 #endif
 }
 
-static void notify(unsigned char *p, int len, char *url, char *checkmsn,
-		   char *sqlitedb)
+static void notify(unsigned char *p, int len, const char *url,
+		   const char *checkmsn, const char *sqlitedb)
 {
 	if (len > 6 && p[6] & 0x05) { /* only if it's a call setup */
 		char *number, *text, *msn, *notify;
@@ -436,10 +436,10 @@ static void notify(unsigned char *p, int len, char *url, char *checkmsn,
 				text = getcallerinfo(number, url);
 				storecallerinfo(number, text, sqlitedb);
 			}
-			
+
 			notify = malloc(sizeof(char) *
 					(strlen(text) + strlen(msn) + 50));
-			
+
 			if (msn) {
 				sprintf(notify, "%s<br>Called MSN: %s", text,
 					msn);
@@ -466,30 +466,25 @@ struct ctstamp {
 
 int main(int argc, char *argv[])
 {
-	int	aidx=1, idx, i, channel;
-	int	cardnr = 0;
-	int	log_socket;
+	int aidx=1, idx, i, channel, cardnr = 0, log_socket, buflen = 512;
+	int result, opt;
+	u_int cnt;
 	struct sockaddr_mISDN  log_addr;
-	int	buflen = 512;
-	char	sw;
-	char	wfilename[512], lfilename[512], url[512], sqlitedb[512];
-	char	msn[10];
-	u_char	buffer[buflen];
-	struct msghdr	mh;
-	struct iovec	iov[1];
-	struct ctstamp	cts;
-	struct tm	*mt;
-	int	result;
-	int	opt;
-	u_int	cnt;
-	struct mISDN_devinfo	di;
-	struct mISDNhead 	*hh;
-	struct mISDNversion	ver;
-	FILE	*wfile = NULL, *lfile = NULL;
+	char sw;
+	char *wfilename = NULL, *lfilename = NULL, *url = NULL;
+	char *sqlitedb = NULL, *msn = NULL;
+	u_char buffer[buflen];
+	struct msghdr mh;
+	struct iovec iov[1];
+	struct ctstamp cts;
+	struct tm *mt;
+	struct mISDN_devinfo di;
+	struct mISDNhead *hh;
+	struct mISDNversion ver;
+	FILE *wfile = NULL, *lfile = NULL;
 
 	g_type_init();
 
-	*wfilename = 0;
 	while (aidx < argc) {
 		if (argv[aidx] && argv[aidx][0]=='-') {
 			sw=argv[aidx][1];
@@ -507,8 +502,9 @@ int main(int argc, char *argv[])
 						idx=2;
 					}
 					if (aidx<=argc) {
-						if (10 <= strlen(&argv[aidx][idx])) {
-							fprintf(stderr," -m MSN too long\n");
+						msn = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
+						if (msn == NULL) {
+							fprintf(stderr," -m filename too long: Out of memory!\n");
 							exit(1);
 						}
 						strcpy(msn, &argv[aidx][idx]);
@@ -525,8 +521,9 @@ int main(int argc, char *argv[])
 						idx=2;
 					}
 					if (aidx<=argc) {
-						if (512 <= strlen(&argv[aidx][idx])) {
-							fprintf(stderr," -w filename too long\n");
+						wfilename = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
+						if (wfilename == NULL) {
+							fprintf(stderr," -w filename too long: Out of memory!\n");
 							exit(1);
 						}
 						strcpy(wfilename, &argv[aidx][idx]);
@@ -543,8 +540,9 @@ int main(int argc, char *argv[])
 						idx=2;
 					}
 					if (aidx<=argc) {
-						if (512 <= strlen(&argv[aidx][idx])) {
-							fprintf(stderr," -l filename too long\n");
+						lfilename = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
+						if (lfilename == NULL) {
+							fprintf(stderr," -l filename too long: Out of memory!\n");
 							exit(1);
 						}
 						strcpy(lfilename, &argv[aidx][idx]);
@@ -561,8 +559,9 @@ int main(int argc, char *argv[])
 						idx=2;
 					}
 					if (aidx<=argc) {
-						if (512 <= strlen(&argv[aidx][idx])) {
-							fprintf(stderr," -u URL too long\n");
+						url = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
+						if (url == NULL) {
+							fprintf(stderr," -u URL too long: Out of memory!\n");
 							exit(1);
 						}
 						strcpy(url, &argv[aidx][idx]);
@@ -579,8 +578,9 @@ int main(int argc, char *argv[])
 						idx=2;
 					}
 					if (aidx<=argc) {
-						if (512 <= strlen(&argv[aidx][idx])) {
-							fprintf(stderr," -d filename too long\n");
+						sqlitedb = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
+						if (sqlitedb == NULL) {
+							fprintf(stderr," -d filename too long: Out of memory!\n");
 							exit(1);
 						}
 						strcpy(sqlitedb, &argv[aidx][idx]);
@@ -717,10 +717,10 @@ int main(int argc, char *argv[])
 	if (strlen(lfilename)) {
 		lfile = fopen(lfilename, "a");
 		if (lfile) {
-			fprintf(lfile, "misdn_monitor started\n\n");
+			fprintf(lfile, "\nmisdn_monitor started\n");
 			fflush(lfile);
 		} else
-			printf("cannot open wireshark dump file(%s)\n",
+			printf("cannot open log file(%s)\n",
 			       lfilename);
 	}
 #ifdef HAVE_SQLITE3
@@ -779,8 +779,8 @@ int main(int argc, char *argv[])
 				printhex(&buffer[MISDN_HEADER_LEN],
 					 result - MISDN_HEADER_LEN);
 				notify(&buffer[MISDN_HEADER_LEN],
-				       result - MISDN_HEADER_LEN, url, msn,
-				       sqlitedb);
+				       result - MISDN_HEADER_LEN,
+				       url, msn, sqlitedb);
 			} else
 				printf("\n");
 		}
