@@ -64,6 +64,8 @@
 #define AF_COMPATIBILITY_FUNC
 #include <compat_af_isdn.h>
 
+#include <getopt.h>
+
 static int writer(char *data, size_t size, size_t nmemb, GString *buffer) {
 	int result = 0;
 	if (buffer != NULL && data != NULL) {
@@ -466,11 +468,10 @@ struct ctstamp {
 
 int main(int argc, char *argv[])
 {
-	int aidx=1, idx, i, channel, cardnr = 0, log_socket, buflen = 512;
-	int result, opt;
+	int i, channel, cardnr = 0, log_socket = 0, buflen = 512;
+	int result, opt, c;
 	u_int cnt;
 	struct sockaddr_mISDN  log_addr;
-	char sw;
 	char *wfilename = NULL, *lfilename = NULL, *url = NULL;
 	char *sqlitedb = NULL, *msn = NULL;
 	u_char buffer[buflen];
@@ -494,126 +495,70 @@ int main(int argc, char *argv[])
 
 	g_type_init();
 
-	while (aidx < argc) {
-		if (argv[aidx] && argv[aidx][0]=='-') {
-			sw=argv[aidx][1];
-			switch (sw) {
-				case 'c':
-					if (argv[aidx][2]) {
-						cardnr=atol(&argv[aidx][2]);
-					}
-					break;
-				case 'm':
-					if (!argv[aidx][2]) {
-						idx = 0;
-						aidx++;
-					} else {
-						idx=2;
-					}
-					if (aidx<=argc) {
-						msn = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
-						if (msn == NULL) {
-							fprintf(stderr," -m filename too long: Out of memory!\n");
-							exit(1);
-						}
-						strcpy(msn, &argv[aidx][idx]);
-					} else {
-						fprintf(stderr," Switch %c without value\n",sw);
-						exit(1);
-					}
-					break;
-				case 'w':
-					if (!argv[aidx][2]) {
-						idx = 0;
-						aidx++;
-					} else {
-						idx=2;
-					}
-					if (aidx<=argc) {
-						wfilename = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
-						if (wfilename == NULL) {
-							fprintf(stderr," -w filename too long: Out of memory!\n");
-							exit(1);
-						}
-						strcpy(wfilename, &argv[aidx][idx]);
-					} else {
-						fprintf(stderr," Switch %c without value\n",sw);
-						exit(1);
-					}
-					break;
-				case 'l':
-					if (!argv[aidx][2]) {
-						idx = 0;
-						aidx++;
-					} else {
-						idx=2;
-					}
-					if (aidx<=argc) {
-						lfilename = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
-						if (lfilename == NULL) {
-							fprintf(stderr," -l filename too long: Out of memory!\n");
-							exit(1);
-						}
-						strcpy(lfilename, &argv[aidx][idx]);
-					} else {
-						fprintf(stderr," Switch %c without value\n",sw);
-						exit(1);
-					}
-					break;
-				case 'u':
-					if (!argv[aidx][2]) {
-						idx = 0;
-						aidx++;
-					} else {
-						idx=2;
-					}
-					if (aidx<=argc) {
-						url = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
-						if (url == NULL) {
-							fprintf(stderr," -u URL too long: Out of memory!\n");
-							exit(1);
-						}
-						strcpy(url, &argv[aidx][idx]);
-					} else {
-						fprintf(stderr," Switch %c without value\n",sw);
-						exit(1);
-					}
-					break;
-				case 'd':
-					if (!argv[aidx][2]) {
-						idx = 0;
-						aidx++;
-					} else {
-						idx=2;
-					}
-					if (aidx<=argc) {
-						sqlitedb = (char *)malloc(sizeof(char) * (strlen(&argv[aidx][idx])+1));
-						if (sqlitedb == NULL) {
-							fprintf(stderr," -d filename too long: Out of memory!\n");
-							exit(1);
-						}
-						strcpy(sqlitedb, &argv[aidx][idx]);
-					} else {
-						fprintf(stderr," Switch %c without value\n",sw);
-						exit(1);
-					}
-					break;
-				case '?' :
-					usage(argv[0]);
+	while (1) {
+		int option_index = 0;
+		static struct option long_options[] = {
+			{0, 0, 0, 0}
+		};
+
+		c = getopt_long (argc, argv, "c:m:w:l:u:d:", long_options, &option_index);
+		if (c == -1)
+			break;
+
+		switch (c) {
+			case 'c':
+				cardnr=atol(optarg);
+				break;
+			case 'm':
+				msn = (char *)malloc(sizeof(char) * (strlen(optarg)+1));
+				if (msn == NULL) {
+					fprintf(stderr," -m filename too long: Out of memory!\n");
 					exit(1);
-					break;
-				default  :
-					fprintf(stderr,"Unknown Switch %c\n",sw);
-					usage(argv[0]);
+				}
+				strcpy(msn, optarg);
+				break;
+			case 'w':
+				wfilename = (char *)malloc(sizeof(char) * (strlen(optarg)+1));
+				if (wfilename == NULL) {
+					fprintf(stderr," -w filename too long: Out of memory!\n");
 					exit(1);
-					break;
-			}
-		}  else {
-			fprintf(stderr,"Undefined argument %s\n",argv[aidx]);
-			usage(argv[0]);
-			exit(1);
+				}
+				strcpy(wfilename, optarg);
+				break;
+			case 'l':
+				lfilename = (char *)malloc(sizeof(char) * (strlen(optarg)+1));
+				if (lfilename == NULL) {
+					fprintf(stderr," -l filename too long: Out of memory!\n");
+					exit(1);
+				}
+				strcpy(lfilename, optarg);
+				break;
+			case 'u':
+				url = (char *)malloc(sizeof(char) * (strlen(optarg)+1));
+				if (url == NULL) {
+					fprintf(stderr," -u URL too long: Out of memory!\n");
+					exit(1);
+				}
+				strcpy(url, optarg);
+				break;
+			case 'd':
+				sqlitedb = (char *)malloc(sizeof(char) * (strlen(optarg)+1));
+				if (sqlitedb == NULL) {
+					fprintf(stderr," -d filename too long: Out of memory!\n");
+					exit(1);
+				}
+				strcpy(sqlitedb, optarg);
+				break;
+			case '?' :
+				usage(argv[0]);
+				exit(1);
+				break;
+			default  :
+				fprintf(stderr,"Unknown Switch %c\n",c);
+				usage(argv[0]);
+				exit(1);
+				break;
 		}
-		aidx++;
 	}
 
 	if (cardnr < 0) {
