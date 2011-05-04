@@ -388,6 +388,8 @@ static char *checkcallerinfo(char *number, const char *sqlitedb)
 	}
 	else
 #endif
+		(void)number;
+		(void)sqlitedb;
 		return NULL;
 }
 
@@ -411,12 +413,15 @@ static void storecallerinfo(char *number, char *text, const char *sqlitedb)
 		sqlite3_close(handle);
 	}
 #endif
+	(void)number;
+	(void)text;
+	(void)sqlitedb;
 }
 
 static void notify(unsigned char *p, int len, const char *url,
 		   const char *checkmsn, const char *sqlitedb)
 {
-	if (len > 6 && p[6] & 0x05) { /* only if it's a call setup */
+	if (len > 6 && p[6] == 0x05) { /* only if it's a call setup */
 		char *number, *text, *msn, *notify;
 
 		number = getcallerid(p);
